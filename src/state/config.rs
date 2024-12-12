@@ -40,6 +40,7 @@ pub struct CMotd {
 pub struct Limitations {
     pub max_avatar_size: u64,
     pub max_avatars: u64,
+    pub can_upload: bool,
 }
 
 #[derive(Deserialize, Clone, Debug, PartialEq)]

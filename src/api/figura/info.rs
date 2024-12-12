@@ -43,6 +43,7 @@ pub async fn limits(State(state): State<AppState>) -> Json<Value> {
         "limits": {
             "maxAvatarSize": state.max_avatar_size * 1000,
             "maxAvatars": state.max_avatars,
+            "canUpload": state.can_upload,
             "allowedBadges": {
                 "special": [0,0,0,0,0,0],
                 "pride": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]

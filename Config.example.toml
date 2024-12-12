@@ -72,6 +72,7 @@ customText = """
 maxAvatarSize = 100 # KB
 maxAvatars = 10 # It doesn't look like Figura has any actions implemented with this?
 # P.S. And it doesn't look like the current API allows anything like that...
+canUpload = false # Do not allow player upload avatars
 
 [advancedUsers.66004548-4de5-49de-bade-9c3933d8eb97]
 username = "Shiroyashik"
