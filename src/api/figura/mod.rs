@@ -1,5 +1,5 @@
 mod types;
-mod websocket;
+pub(crate) mod websocket;
 pub mod auth;
 pub mod profile;
 pub mod info;

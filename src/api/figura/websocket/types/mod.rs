@@ -1,5 +1,5 @@
 mod c2s;
-mod s2c;
+pub(crate) mod s2c;
 mod errors;
 mod session;
 
