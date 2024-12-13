@@ -76,11 +76,30 @@ pub async fn user_info(
     Ok(Json(user_info_response))
 }
 
-pub async fn download_avatar(Path(uuid): Path<Uuid>) -> ApiResult<Vec<u8>> {
-    let uuid = format_uuid(&uuid);
-    tracing::info!("Requesting an avatar: {}", uuid);
-    let mut file = if let Ok(file) = fs::File::open(format!("{}/{}.moon", *AVATARS_VAR, uuid)).await {
-        file
+pub async fn download_avatar(
+    Path(uuid): Path<Uuid>,
+    Token(token): Token,
+    State(state): State<AppState>
+) -> ApiResult<Vec<u8>> {
+    let str_uuid = format_uuid(&uuid);
+    tracing::info!("Requesting an avatar: {}", str_uuid);
+    let avatar_file = format!("{}/{}.moon", *AVATARS_VAR, str_uuid);
+
+    if let Some(user_info) = state.user_manager.get(&token) {
+        let user_uuid = user_info.uuid;
+        if uuid.eq(&user_uuid) { // check temp when they download their self avatar
+            let avatar_file_temp = format!("{}/temp/{}.moon", *AVATARS_VAR, format_uuid(&user_info.uuid));
+            if let Ok(mut file1) = fs::File::open(avatar_file_temp.clone()).await {
+                let mut buffer = Vec::new();
+                file1.read_to_end(&mut buffer).await.map_err(internal_and_log)?;
+                fs::remove_file(avatar_file_temp.clone()).await.map_err(internal_and_log)?;
+                return Ok(buffer);
+            }
+        }
+    }
+
+    let mut file = if let Ok(file1) = fs::File::open(avatar_file).await {
+        file1
     } else {
         return Err(ApiError::NotFound)
     };
