@@ -10,7 +10,6 @@ use tracing::{debug, error, trace, warn};
 use uuid::Uuid;
 
 use crate::{ApiError, ApiResult, AppState, TIMEOUT, USER_AGENT};
-use crate::state::Config;
 use super::types::*;
 
 // It's an extractor that pulls a token from the Header.
@@ -72,7 +71,7 @@ enum FetchError {
 }
 
 async fn fetch_json(
-    config: &Config,
+    State(state): State<AppState>,
     auth_provider: &AuthProvider,
     server_id: &str,
     username: &str,
@@ -90,10 +89,11 @@ async fn fetch_json(
         200 => {
             let json = serde_json::from_str::<serde_json::Value>(&res.text().await?).with_context(|| "Cant deserialize".to_string())?;
             let uuid = get_id_json(&json).with_context(|| "Cant get UUID".to_string())?;
+            let def_can_upload = state.config.read().await.limitations.can_upload;
             let can_upload = json.get("can_upload")
-                .map(|s| s.as_bool().unwrap_or(config.limitations.can_upload))
-                .unwrap_or(config.limitations.can_upload);
-
+                .map(|s| s.as_bool().unwrap_or(def_can_upload))
+                .unwrap_or(def_can_upload);
+            state.user_manager.put_upload_state(uuid, can_upload);
             Ok((uuid, auth_provider.clone()))
         }
         _ => Err(FetchError::WrongResponse(res.status().as_u16(), res.text().await)),
@@ -101,16 +101,16 @@ async fn fetch_json(
 }
 
 pub async fn has_joined(
-    config: Config,
+    State(state): State<AppState>,
     server_id: &str,
     username: &str,
 ) -> anyhow::Result<Option<(Uuid, AuthProvider)>> {
     let (tx, mut rx) = tokio::sync::mpsc::channel(1);
-    let AuthProviders(auth_providers) = config.auth_providers.clone();
+    let AuthProviders(auth_providers) = state.config.read().await.auth_providers.clone();
 
     for provider in &auth_providers {
         tokio::spawn(fetch_and_send(
-            &config,
+            State(state.clone()),
             provider.clone(),
             server_id.to_string(),
             username.to_string(),
@@ -154,13 +154,13 @@ pub async fn has_joined(
 }
 
 async fn fetch_and_send(
-    config: &Config,
+    State(state): State<AppState>,
     provider: AuthProvider,
     server_id: String,
     username: String,
     tx: tokio::sync::mpsc::Sender<Result<(Uuid, AuthProvider), FetchError>>
 ) {
-    let _ = tx.send(fetch_json(config, &provider, &server_id, &username).await)
+    let _ = tx.send(fetch_json(State(state), &provider, &server_id, &username).await)
         .await.map_err( |err| trace!("fetch_and_send error [note: ok res returned and mpsc clossed]: {err:?}"));
 }
 

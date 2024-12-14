@@ -34,7 +34,7 @@ async fn verify(
     let server_id = query.id.clone();
     let nickname = state.user_manager.pending_remove(&server_id).unwrap().1; // TODO: Add error check
     let userinfo = match has_joined(
-        state.config.read(),
+        State(state.clone()),
         &server_id,
         &nickname
     ).await {
