@@ -10,7 +10,7 @@ use tracing::{debug, error, trace, warn};
 use uuid::Uuid;
 
 use crate::{ApiError, ApiResult, AppState, TIMEOUT, USER_AGENT};
-
+use crate::state::Config;
 use super::types::*;
 
 // It's an extractor that pulls a token from the Header.
@@ -72,6 +72,7 @@ enum FetchError {
 }
 
 async fn fetch_json(
+    config: &Config,
     auth_provider: &AuthProvider,
     server_id: &str,
     username: &str,
@@ -89,6 +90,10 @@ async fn fetch_json(
         200 => {
             let json = serde_json::from_str::<serde_json::Value>(&res.text().await?).with_context(|| "Cant deserialize".to_string())?;
             let uuid = get_id_json(&json).with_context(|| "Cant get UUID".to_string())?;
+            let can_upload = json.get("can_upload")
+                .map(|s| s.as_bool().unwrap_or(config.limitations.can_upload))
+                .unwrap_or(config.limitations.can_upload);
+
             Ok((uuid, auth_provider.clone()))
         }
         _ => Err(FetchError::WrongResponse(res.status().as_u16(), res.text().await)),
@@ -96,14 +101,16 @@ async fn fetch_json(
 }
 
 pub async fn has_joined(
-    AuthProviders(authproviders): AuthProviders,
+    config: Config,
     server_id: &str,
     username: &str,
 ) -> anyhow::Result<Option<(Uuid, AuthProvider)>> {
     let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+    let AuthProviders(auth_providers) = config.auth_providers.clone();
 
-    for provider in &authproviders {
+    for provider in &auth_providers {
         tokio::spawn(fetch_and_send(
+            &config,
             provider.clone(),
             server_id.to_string(),
             username.to_string(),
@@ -112,7 +119,7 @@ pub async fn has_joined(
     } 
     let mut errors = Vec::new(); // Counting fetches what returns errors
     let mut misses = Vec::new(); // Counting non OK results
-    let mut prov_count: usize = authproviders.len();
+    let mut prov_count: usize = auth_providers.len();
     while prov_count > 0 {
         if let Some(fetch_res) = rx.recv().await {
             match fetch_res {
@@ -147,12 +154,13 @@ pub async fn has_joined(
 }
 
 async fn fetch_and_send(
+    config: &Config,
     provider: AuthProvider,
     server_id: String,
     username: String,
     tx: tokio::sync::mpsc::Sender<Result<(Uuid, AuthProvider), FetchError>>
 ) {
-    let _ = tx.send(fetch_json(&provider, &server_id, &username).await)
+    let _ = tx.send(fetch_json(config, &provider, &server_id, &username).await)
         .await.map_err( |err| trace!("fetch_and_send error [note: ok res returned and mpsc clossed]: {err:?}"));
 }
 
@@ -165,6 +173,8 @@ pub struct UManager {
     authenticated: Arc<DashMap<String, Uuid>>, // <SHA1 serverId, Userinfo>
     /// Registered users
     registered: Arc<DashMap<Uuid, Userinfo>>,
+    /// uploadState
+    can_upload: Arc<DashMap<Uuid, bool>>,
 }
 
 impl UManager {
@@ -173,6 +183,7 @@ impl UManager {
             pending: Arc::new(DashMap::new()),
             registered: Arc::new(DashMap::new()),
             authenticated: Arc::new(DashMap::new()),
+            can_upload: Arc::new(DashMap::new()),
         }
     }
     pub fn get_all_registered(&self) -> DashMap<Uuid, Userinfo> {
@@ -251,6 +262,14 @@ impl UManager {
     }
     pub fn count_authenticated(&self) -> usize {
         self.authenticated.len()
+    }
+    pub fn put_upload_state(&self, uuid: Uuid, upload_state: bool) {
+        self.can_upload.insert(uuid, upload_state);
+    }
+    pub fn upload_state(&self, uuid: Uuid, def: bool) -> bool {
+        self.can_upload.get(&uuid)
+            .map(|upload_state| { *upload_state.value() })
+            .unwrap_or(def)
     }
     pub fn remove(&self, uuid: &Uuid) {
         let token = self.registered.get(uuid).unwrap().token.clone().unwrap();
