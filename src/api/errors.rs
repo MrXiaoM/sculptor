@@ -10,6 +10,8 @@ pub enum ApiError {
     BadRequest, // 400
     #[error("unauthorized")]
     Unauthorized, // 401
+    #[error("forbidden")]
+    Forbidden, // 403
     #[error("not found")]
     NotFound, // 404
     #[error("not acceptable")]
@@ -23,6 +25,7 @@ impl IntoResponse for ApiError {
         match self {
             ApiError::BadRequest => (StatusCode::BAD_REQUEST, "bad request").into_response(),
             ApiError::Unauthorized => (StatusCode::UNAUTHORIZED, "unauthorized").into_response(),
+            ApiError::Forbidden=> (StatusCode::FORBIDDEN, "forbidden").into_response(),
             ApiError::NotAcceptable=> (StatusCode::NOT_ACCEPTABLE, "not acceptable").into_response(),
             ApiError::NotFound => (StatusCode::NOT_FOUND, "not found").into_response(),
             ApiError::Internal => (StatusCode::INTERNAL_SERVER_ERROR, "internal server error").into_response(),

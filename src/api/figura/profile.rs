@@ -121,6 +121,11 @@ pub async fn upload_avatar(
             user_info.uuid,
             user_info.nickname
         );
+        let def = state.config.read().await.limitations.can_upload;
+        let can_upload = state.user_manager.upload_state(user_info.uuid, def);
+        if !can_upload {
+            return Err(ApiError::Forbidden);
+        }
         let avatar_file = format!("{}/{}.moon", *AVATARS_VAR, user_info.uuid);
         let mut file = BufWriter::new(fs::File::create(&avatar_file).await.map_err(internal_and_log)?);
         io::copy(&mut request_data.as_ref(), &mut file).await.map_err(internal_and_log)?;
