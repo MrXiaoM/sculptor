@@ -87,3 +87,19 @@ pub async fn user_event(
     };
     Ok("ok".to_string())
 }
+
+pub async fn user_upload_state(
+    Path((uuid, us)): Path<(Uuid, bool)>,
+    State(state): State<AppState>,
+) -> ApiResult<String> {
+    if let Some(user_info) = state.user_manager.get_by_uuid(&uuid) {
+        tracing::info!(
+            "internal api trying to update upload state to {} for {} ({})",
+            us,
+            user_info.uuid,
+            user_info.nickname
+        );
+        state.user_manager.put_upload_state(uuid, us);
+    }
+    Ok("ok".to_string())
+}

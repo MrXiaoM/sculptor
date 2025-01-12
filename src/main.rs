@@ -203,6 +203,7 @@ async fn app() -> Result<bool> {
         .route("/:uuid/avatar", put(lambda_internal::upload_avatar))
         .route("/:uuid/avatar", delete(lambda_internal::delete_avatar))
         .route("/:uuid/event", get(lambda_internal::user_event))
+        .route("/:uuid/upload_state/:us", get(lambda_internal::user_upload_state))
         .route("/health", get(|| async { "ok internal" }))
         .layer(from_fn(internal_applicator));
 
