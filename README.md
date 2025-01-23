@@ -5,6 +5,8 @@
 
 Minecraft 模组 [FiguraLambda](https://github.com/MrXiaoM/FiguraLambda) 的后端，适应 λ 生态作出了一点修改。
 
+RUST is ReALLy HARD. QAQ
+
 ## Figura Lambda 生态软件
 
 + [FiguraLambda](https://github.com/MrXiaoM/FiguraLambda): 客户端Mod
