@@ -1,14 +1,10 @@
 #![allow(clippy::module_inception)]
 use anyhow::Result;
-use axum::{extract::DefaultBodyLimit, http, routing::{delete, get, post, put}, Router};
+use axum::{extract::DefaultBodyLimit, routing::{delete, get, post, put}, Router};
 use dashmap::DashMap;
 use tracing_panic::panic_hook;
 use tracing_subscriber::{fmt::{self, time::ChronoLocal}, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 use std::{path::PathBuf, sync::Arc, env::var};
-use axum::http::header::HOST;
-use axum::http::Request;
-use axum::middleware::{from_fn, Next};
-use axum::response::{IntoResponse, Response};
 use tokio::{fs, sync::RwLock, time::Instant};
 use tower_http::trace::TraceLayer;
 use lazy_static::lazy_static;
@@ -31,6 +27,7 @@ use api::{
 // Auth
 mod auth;
 use auth::{UManager, check_auth};
+use lambda_internal::{check_internal};
 
 // Config
 mod state;
@@ -204,8 +201,7 @@ async fn app() -> Result<bool> {
         .route("/:uuid/avatar", delete(lambda_internal::delete_avatar))
         .route("/:uuid/event", get(lambda_internal::user_event))
         .route("/:uuid/upload_state/:us", get(lambda_internal::user_upload_state))
-        .route("/health", get(|| async { "ok internal" }))
-        .layer(from_fn(internal_applicator));
+        .route("/health", get(check_internal));
 
     let app = Router::new()
         .nest("/api", api)
@@ -223,23 +219,6 @@ async fn app() -> Result<bool> {
         .await?;
     tracing::info!("Serve stopped.");
     Ok(false)
-}
-
-async fn internal_applicator(request: Request<axum::body::Body>, next: Next) -> Response {
-    let host_header = request
-        .headers()
-        .get(&HOST)
-        .map(|value| value.as_ref().to_owned())
-        ;
-    let response = next.run(request).await;
-    let allow = String::from("lambda");
-    let host = host_header.as_deref();
-    if host.is_none() || !allow.as_bytes().eq(host.unwrap()) {
-        let mut resp = "".into_response();
-        *resp.status_mut() = http::status::StatusCode::FORBIDDEN;
-        return resp;
-    }
-    response
 }
 
 async fn shutdown_signal() {
