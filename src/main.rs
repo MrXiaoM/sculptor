@@ -125,6 +125,12 @@ async fn app() -> Result<bool> {
             fs::create_dir_all(path).await.expect("Can't create avatars folder!");
             tracing::info!("Created avatars directory");
         }
+        let temp_path = format!("{}/temp", *AVATARS_VAR);
+        let path1 = PathBuf::from(&temp_path);
+        if !path1.exists() {
+            fs::create_dir_all(path1).await.expect("Can't create temp avatars folder!");
+            tracing::info!("Created temp avatars directory");
+        }
     }
 
     // Config
