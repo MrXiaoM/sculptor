@@ -1,3 +1,6 @@
+use std::ops::Add;
+use std::path::PathBuf;
+use std::time::{Duration, SystemTime};
 use axum::{
     body::Bytes, extract::{Path, State}, Json
 };
@@ -16,15 +19,38 @@ use crate::{
 };
 use super::websocket::S2CMessage;
 
+pub fn is_requesting_self(uuid: Uuid, state: &AppState, token: &String) -> bool {
+    return if let Some(user_info) = state.user_manager.get(token) {
+        let user_uuid = user_info.uuid;
+        uuid.eq(&user_uuid)
+    } else { false };
+}
+
 pub async fn user_info(
     Path(uuid): Path<Uuid>,
+    Token(token): Token,
     State(state): State<AppState>,
 ) -> ApiResult<Json<Value>> {
     tracing::info!("Receiving profile information for {}", uuid);
 
     let formatted_uuid = format_uuid(&uuid);
 
-    let avatar_file = format!("{}/{}.moon", *AVATARS_VAR, formatted_uuid);
+    let request_temp_state = state.user_manager.request_temp_state(uuid, false);
+    let request_self_avatar = is_requesting_self(uuid, &state, &token);
+    let temp_avatar_file = format!("{}/temp/{}.moon", *AVATARS_VAR, formatted_uuid);
+    let path = PathBuf::from(&temp_avatar_file);
+    let outdated = if path.exists() {
+        let meta = path.metadata().unwrap();
+        let last_modified = meta.modified().unwrap();
+        SystemTime::now() > last_modified.add(Duration::from_secs(60))
+    } else { false };
+    let avatar_file = if !request_temp_state && request_self_avatar && !outdated {
+        tracing::info!("Profile {} is self requesting and it is temp", uuid);
+        state.user_manager.put_request_temp_state(uuid, true);
+        temp_avatar_file
+    } else {
+        format!("{}/{}.moon", *AVATARS_VAR, formatted_uuid)
+    };
 
     let userinfo = if let Some(info) = state.user_manager.get_by_uuid(&uuid) { info } else {
         return Err(ApiError::BadRequest) // NOTE: Not Found (404) shows badge
@@ -83,30 +109,28 @@ pub async fn download_avatar(
 ) -> ApiResult<Vec<u8>> {
     let str_uuid = format_uuid(&uuid);
     tracing::info!("Requesting an avatar: {}", str_uuid);
-    let avatar_file = format!("{}/{}.moon", *AVATARS_VAR, str_uuid);
 
-    if let Some(user_info) = state.user_manager.get(&token) {
-        let user_uuid = user_info.uuid;
-        if uuid.eq(&user_uuid) { // check temp when they download their self avatar
-            tracing::info!("Requesting an temp avatar: {}", str_uuid);
-            let avatar_file_temp = format!("{}/temp/{}.moon", *AVATARS_VAR, format_uuid(&user_uuid));
-            if let Ok(mut file1) = fs::File::open(avatar_file_temp.clone()).await {
-                tracing::info!("temp avatar match: {}", str_uuid);
-                let mut buffer = Vec::new();
-                file1.read_to_end(&mut buffer).await.map_err(internal_and_log)?;
-                fs::remove_file(avatar_file_temp.clone()).await.map_err(internal_and_log)?;
-                return Ok(buffer);
-            }
-        }
-    }
+    let download_self_avatar = is_requesting_self(uuid, &state, &token);
+    let temp_avatar_file = format!("{}/temp/{}.moon", *AVATARS_VAR, str_uuid);
+    let path = PathBuf::from(temp_avatar_file);
+    let (avatar_file, delete_temp) = if download_self_avatar && path.exists() {
+        tracing::info!("Avatar of {} is temp avatar.", str_uuid);
+        (format!("{}/temp/{}.moon", *AVATARS_VAR, str_uuid), true)
+    } else {
+        (format!("{}/{}.moon", *AVATARS_VAR, str_uuid), false)
+    };
 
-    let mut file = if let Ok(file1) = fs::File::open(avatar_file).await {
+    let mut file = if let Ok(file1) = fs::File::open(avatar_file.clone()).await {
         file1
     } else {
         return Err(ApiError::NotFound)
     };
     let mut buffer = Vec::new();
     file.read_to_end(&mut buffer).await.map_err(internal_and_log)?;
+    if delete_temp {
+        let to_delete = avatar_file;
+        fs::remove_file(to_delete).await.map_err(internal_and_log)?;
+    }
     Ok(buffer)
 }
 

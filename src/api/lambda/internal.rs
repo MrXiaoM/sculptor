@@ -29,6 +29,7 @@ pub async fn temp_avatar(
             user_info.uuid,
             user_info.nickname
         );
+        state.user_manager.put_request_temp_state(uuid, false);
         let avatar_file = format!("{}/temp/{}.moon", *AVATARS_VAR, user_info.uuid);
         let mut file = BufWriter::new(fs::File::create(&avatar_file).await.map_err(internal_and_log)?);
         io::copy(&mut request_data.as_ref(), &mut file).await.map_err(internal_and_log)?;

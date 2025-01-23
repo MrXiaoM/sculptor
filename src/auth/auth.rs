@@ -175,6 +175,8 @@ pub struct UManager {
     registered: Arc<DashMap<Uuid, Userinfo>>,
     /// uploadState
     can_upload: Arc<DashMap<Uuid, bool>>,
+    /// temp state
+    requested_temp: Arc<DashMap<Uuid, bool>>,
 }
 
 impl UManager {
@@ -184,6 +186,7 @@ impl UManager {
             registered: Arc::new(DashMap::new()),
             authenticated: Arc::new(DashMap::new()),
             can_upload: Arc::new(DashMap::new()),
+            requested_temp: Arc::new(DashMap::new()),
         }
     }
     pub fn get_all_registered(&self) -> DashMap<Uuid, Userinfo> {
@@ -271,6 +274,15 @@ impl UManager {
             .map(|upload_state| { *upload_state.value() })
             .unwrap_or(def)
     }
+    pub fn put_request_temp_state(&self, uuid: Uuid, temp_state: bool) {
+        self.requested_temp.insert(uuid, temp_state);
+    }
+    pub fn request_temp_state(&self, uuid: Uuid, def: bool) -> bool {
+        self.requested_temp.get(&uuid)
+            .map(|temp_state| { *temp_state.value() })
+            .unwrap_or(def)
+    }
+
     pub fn remove(&self, uuid: &Uuid) {
         let token = self.registered.get(uuid).unwrap().token.clone().unwrap();
         self.authenticated.remove(&token);
