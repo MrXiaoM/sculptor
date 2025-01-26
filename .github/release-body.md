@@ -3,10 +3,8 @@
 > [!CAUTION]
 > **Update your Config.toml according to the example in the repository!**
 
-What's added:
-- Added support for **Assets**! As well as their automatic update from Figura repository!
-- WebSocket reworked! *No more panics!*
-- Reworked auto-update of conf files.
-- Fixed avatar size limits
+**更新日志**: https://github.com/MrXiaoM/sculptor/compare/v0.4.0...v0.4.1
 
-**Full Changelog**: https://github.com/shiroyashik/sculptor/compare/v0.3.1...v0.4.0
+## 镜像地址
+
+https://mrxiaom.lanzout.com/s/figura-backend
